@@ -1,0 +1,11 @@
+{
+  "name": "starship-signal",
+  "private": true,
+  "description": "Walkable first-person Starship cabin whose windows are Imagine stills and video",
+  "scripts": {
+    "test": "node tests/run.js",
+    "browser-load": "node tests/browser-load.js",
+    "probe": "node tests/playwright-probe.js",
+    "serve": "python3 -m http.server 8765"
+  }
+}

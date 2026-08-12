@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SIGNAL — Starship · Deck 4</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #e8edf2;
+      --dim: #8b97a3;
+      --line: rgba(232, 237, 242, 0.14);
+      --ok: #3dff9a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; cursor: none !important; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050607;
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Söhne", "Helvetica Neue", sans-serif;
+    }
+    #viewport {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #viewport canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .grain, .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .grain {
+      opacity: 0.09;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      mix-blend-mode: overlay;
+    }
+    .vignette {
+      background: radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.55) 100%);
+    }
+    #hud {
+      position: fixed;
+      left: 24px;
+      bottom: 22px;
+      z-index: 4;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--dim);
+      pointer-events: none;
+    }
+    #hud b {
+      color: var(--ok);
+      font-weight: 500;
+    }
+    #mark {
+      position: fixed;
+      top: 22px;
+      left: 24px;
+      z-index: 4;
+      font-size: 11px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--ink);
+      pointer-events: none;
+    }
+    #mark span { color: var(--dim); letter-spacing: 0.22em; }
+    #file-hint {
+      position: fixed;
+      top: 52px;
+      left: 24px;
+      z-index: 5;
+      max-width: 340px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--dim);
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      background: rgba(5,6,7,0.7);
+    }
+    #chrome {
+      position: fixed;
+      top: 18px;
+      right: 22px;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #chrome button {
+      appearance: none;
+      font-family: inherit;
+      border: 1px solid var(--ink);
+      background: rgba(5,6,7,0.55);
+      color: var(--ink);
+      padding: 10px 14px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    #chrome button:hover { background: var(--ink); color: #050607; }
+    #chrome button[aria-pressed="true"] {
+      border-color: #ff6b6b;
+      color: #ff6b6b;
+    }
+    #chrome button[aria-pressed="true"]:hover {
+      background: #ff6b6b;
+      color: #050607;
+    }
+    .cursor-mark {
+      display: block;
+      width: 32px;
+      height: 32px;
+      overflow: visible;
+    }
+    .cursor-mark .tick,
+    .cursor-mark .ring {
+      fill: none;
+      stroke: #e8edf2;
+      stroke-width: 1.4;
+      stroke-linecap: square;
+    }
+    .cursor-mark .core { fill: #3dff9a; }
+    #cursor {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 30;
+      width: 32px;
+      height: 32px;
+      margin: -16px 0 0 -16px;
+      pointer-events: none;
+      transform: translate3d(var(--cx, -80px), var(--cy, -80px), 0);
+      will-change: transform;
+    }
+    #cursor[hidden] { display: none !important; }
+    #cursor.is-hover .tick,
+    #cursor.is-hover .ring { stroke: #3dff9a; }
+    #cursor.is-hover .core { fill: #e8edf2; }
+    #cursor.is-down { transform: translate3d(var(--cx, 0px), var(--cy, 0px), 0) scale(0.82); }
+    #reticle {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 5;
+      width: 32px;
+      height: 32px;
+      margin: -16px 0 0 -16px;
+      pointer-events: none;
+    }
+    #reticle[hidden] { display: none !important; }
+    #reticle.is-ready .tick,
+    #reticle.is-ready .ring { stroke: #3dff9a; }
+    #look-prompt {
+      position: fixed;
+      left: 50%;
+      top: calc(50% + 42px);
+      transform: translateX(-50%);
+      z-index: 5;
+      pointer-events: none;
+    }
+    #look-prompt[hidden] { display: none !important; }
+    .look-prompt-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 260px;
+      padding: 14px 16px;
+      border: 1px solid rgba(61, 255, 154, 0.45);
+      background: rgba(5, 6, 7, 0.82);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+    .look-prompt-card kbd {
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--ok);
+      color: var(--ok);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+    #look-prompt-world {
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+    #look-prompt-hint {
+      margin-top: 3px;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ok);
+    }
+    #boot {
+      position: fixed;
+      inset: 0;
+      z-index: 6;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-start;
+      padding: 56px;
+      background:
+        linear-gradient(180deg, rgba(5,6,7,0.15), rgba(5,6,7,0.55) 70%),
+        transparent;
+    }
+    #boot[hidden] { display: none !important; }
+    #boot h1 {
+      font-weight: 400;
+      font-size: clamp(40px, 6vw, 78px);
+      letter-spacing: -0.03em;
+      line-height: 0.92;
+    }
+    #boot p {
+      margin-top: 18px;
+      max-width: 420px;
+      color: var(--dim);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    #boot-btn {
+      margin-top: 28px;
+      appearance: none;
+      border: 1px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      padding: 12px 18px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    #boot-btn:hover { background: var(--ink); color: #050607; }
+    kbd {
+      font-family: inherit;
+      border: 1px solid var(--line);
+      padding: 0 5px;
+      font-size: 11px;
+    }
+    #game-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 8;
+      background: #050607;
+    }
+    #game-layer[hidden] { display: none !important; }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto;
+    }
+    #game-exit[hidden] { display: none !important; }
+    #game-result {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      background: rgba(5, 6, 7, 0.62);
+    }
+    #game-result[hidden] { display: none !important; }
+    .game-result-card {
+      width: min(520px, 100%);
+      border: 1px solid var(--line);
+      background: rgba(8, 10, 14, 0.94);
+      padding: 36px 36px 28px;
+      color: var(--ink);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    }
+    .game-result-kicker {
+      font-size: 12px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    #game-result-title {
+      margin-top: 10px;
+      font-weight: 500;
+      font-size: clamp(40px, 6vw, 64px);
+      letter-spacing: -0.035em;
+      line-height: 0.95;
+    }
+    #game-result.is-win #game-result-title { color: var(--ok); }
+    #game-result.is-lose #game-result-title { color: #ff6b6b; }
+    #game-result-body {
+      margin-top: 16px;
+      max-width: 28em;
+      color: #c5cdd4;
+      font-size: 17px;
+      line-height: 1.45;
+    }
+    .game-result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .game-result-actions button {
+      appearance: none;
+      font-family: inherit;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-size: 11px;
+      padding: 12px 18px;
+    }
+    #game-retry {
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: #050607;
+    }
+    #game-retry:hover { background: #fff; }
+    #game-result-leave {
+      border: 1px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+    }
+    #game-result-leave:hover { background: var(--ink); color: #050607; }
+  </style>
+</head>
+<body>
+  <div id="viewport"></div>
+  <div class="grain"></div>
+  <div class="vignette"></div>
+  <div id="mark">SIGNAL <span>Starship · eight worlds</span></div>
+  <div id="chrome">
+    <button id="game-exit" type="button" hidden>Leave window · Esc</button>
+    <button id="mute-btn" type="button" aria-pressed="false">Sound</button>
+    <button id="fs-btn" type="button">Fullscreen</button>
+  </div>
+  <div id="cursor" hidden>
+    <svg class="cursor-mark" viewBox="0 0 48 48" aria-hidden="true">
+      <path class="tick" d="M16 8H8v8M32 8h8v8M8 32v8h8M40 32v8h-8"/>
+      <path class="tick" d="M24 13v5M24 30v5M13 24h5M30 24h5"/>
+      <circle class="ring" cx="24" cy="24" r="3.2"/>
+      <circle class="core" cx="24" cy="24" r="1.25"/>
+    </svg>
+  </div>
+  <div id="reticle" hidden>
+    <svg class="cursor-mark" viewBox="0 0 48 48" aria-hidden="true">
+      <path class="tick" d="M16 8H8v8M32 8h8v8M8 32v8h8M40 32v8h-8"/>
+      <path class="tick" d="M24 13v5M24 30v5M13 24h5M30 24h5"/>
+      <circle class="ring" cx="24" cy="24" r="3.2"/>
+      <circle class="core" cx="24" cy="24" r="1.25"/>
+    </svg>
+  </div>
+  <div id="look-prompt" hidden>
+    <div class="look-prompt-card">
+      <kbd>E</kbd>
+      <div>
+        <div id="look-prompt-world">Window</div>
+        <div id="look-prompt-hint">Press E to enter</div>
+      </div>
+    </div>
+  </div>
+  <div id="game-layer" hidden>
+    <canvas id="game-canvas" width="1280" height="720"></canvas>
+    <div id="game-result" hidden>
+      <div class="game-result-card" role="dialog" aria-modal="true" aria-labelledby="game-result-title">
+        <p id="game-result-kicker" class="game-result-kicker">Window</p>
+        <h2 id="game-result-title">You won</h2>
+        <p id="game-result-body">This window is clear.</p>
+        <div class="game-result-actions">
+          <button id="game-retry" type="button">Retry</button>
+          <button id="game-result-leave" type="button">Leave window</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="file-hint" hidden></div>
+  <div id="hud"><b>LIVE</b> &nbsp; <span id="hud-readout">DECK 4</span></div>
+  <div id="boot">
+    <div>
+      <h1>Deck 4<br>window ring</h1>
+      <p>Nine-meter stainless cabin. Eight panes, eight worlds. Walk the ring, look into a window, then press <kbd>E</kbd> to step through. Click only looks and locks the mouse.</p>
+      <p><kbd>WASD</kbd> move &nbsp; <kbd>mouse</kbd> look &nbsp; <kbd>E</kbd> enter &nbsp; <kbd>Esc</kbd> leave</p>
+      <button id="boot-btn" type="button">Enter cabin</button>
+    </div>
+  </div>
+  <script src="js/vendor/three.min.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/games.js"></script>
+  <script src="js/game-view.js"></script>
+  <script src="js/ledger-data.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
